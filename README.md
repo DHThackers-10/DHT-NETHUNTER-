@@ -56,9 +56,9 @@ nh                    # Shortcut alias
 
 # 📷 Interface Preview
 
-> All banners, prompts, and panels are styled with the Rich library for a clean and modern UX.
+> All banners, prompts, and panels are styled with the Rich library for a clean and modern look
 
-![Screenshot_20250522-175015](https://github.com/user-attachments/assets/78bf97fb-9325-4479-9a59-109c4d40282c)
+![Screenshot_20250522-184613](https://github.com/user-attachments/assets/7309f2ef-da7a-41de-b35e-d66ce87c279f)
 
 
 
