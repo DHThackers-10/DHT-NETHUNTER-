@@ -56,6 +56,7 @@ nh                    # Shortcut alias
 
 > All banners, prompts, and panels are styled with the Rich library for a clean and modern UX.
 
+![Screenshot_20250522-175015](https://github.com/user-attachments/assets/78bf97fb-9325-4479-9a59-109c4d40282c)
 
 
 
@@ -83,5 +84,5 @@ Channel: [YouTube – DHT Hackers](https://youtube.com/@dht-hackers_10?feature=s
 
 GitHub: [follow](https://github.com/DHThackers-10)
 
-WhatsApp Community: Join Us
+WhatsApp Community: [Join Us](https://chat.whatsapp.com/G2hCkCzylra2OENEfhH8Os)
 
