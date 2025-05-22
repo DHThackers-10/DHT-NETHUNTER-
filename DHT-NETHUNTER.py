@@ -3,16 +3,18 @@
 import os
 import time
 import subprocess
+import requests
+import pyfiglet
+
 from rich import print
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
 from rich.align import Align
-import pyfiglet
+from rich.table import Table
+from rich.progress import Progress, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 
 console = Console()
-
-# === Utility Functions ===
 
 def clear():
     os.system("clear" if os.name == "posix" else "cls")
@@ -36,37 +38,44 @@ def dht_hackers_banner():
         os.system("termux-open-url https://youtube.com/@dht-hackers_10")
     Prompt.ask("[yellow]Press Enter after subscribing to continue...[/yellow]")
     clear()
-    
+
 def Kali_tool_banner():
     show_banner("KALI", "bold blue")
     console.print(Align.center(
-    Panel.fit(
-        "[cyan]KALI NETHUNTER INSTALLER\n"
-        "[magenta]Made by:[/magenta] [bold green]DHT Hackers Team[/bold green]",
-        title="[bold green]Welcome[/bold green]",
-        border_style="cyan",
-        padding=(1, 2)
-    )
-))
+        Panel.fit(
+            "[cyan]KALI NETHUNTER INSTALLER\n"
+            "[magenta]Made by:[/magenta] [bold green]DHT Hackers Team[/bold green]",
+            title="[bold green]Welcome[/bold green]",
+            border_style="cyan",
+            padding=(1, 2)
+        )
+    ))
 
-# === Main Installer Functions ===
+def ask(question, default="N"):
+    return Confirm.ask(f"[cyan]{question}[/cyan]", default=default.upper() == "Y")
 
 def unsupported_arch():
     console.print("[bold red]Unsupported Architecture[/bold red]")
     exit(1)
 
-def ask(question, default="N"):
-    return Confirm.ask(f"[cyan]{question}[/cyan]", default=default.upper() == "Y")
-
 def get_arch():
-    console.print("[blue][*] Checking device architecture...[/blue]")
     result = subprocess.check_output("getprop ro.product.cpu.abi", shell=True).decode().strip()
+    arch = None
     if "arm64" in result:
-        return "arm64"
+        arch = "arm64"
     elif "armeabi" in result:
-        return "armhf"
+        arch = "armhf"
     else:
         unsupported_arch()
+
+    table = Table(title="Device Architecture", box=None)
+    table.add_column("Property", style="cyan")
+    table.add_column("Value", style="green")
+    table.add_row("CPU ABI", result)
+    table.add_row("Architecture", arch)
+    console.print(table)
+
+    return arch
 
 def set_strings(arch):
     return (
@@ -82,36 +91,69 @@ def prepare_fs(chroot):
             return True
     return False
 
-def cleanup(image_name):
-    if os.path.exists(image_name):
-        if ask("Delete downloaded rootfs file?", "N"):
-            os.remove(image_name)
-
 def check_dependencies():
-    console.print("[blue]\n[*] Checking package dependencies...[/blue]")
+    console.print("\n[bold blue][*] Checking and installing dependencies...[/bold blue]")
     subprocess.run("apt update -y", shell=True)
-    for pkg in ["proot", "tar", "wget"]:
+    deps = ["proot", "tar", "wget"]
+    table = Table(title="Dependencies", show_lines=True)
+    table.add_column("Package", style="cyan")
+    table.add_column("Status", style="green")
+
+    for pkg in deps:
         if not os.path.exists(f"{os.environ['PREFIX']}/bin/{pkg}"):
-            console.print(f"[yellow]Installing {pkg}...[/yellow]")
-            subprocess.run(f"apt install -y {pkg}", shell=True, check=True)
-    subprocess.run("apt upgrade -y", shell=True)
+            subprocess.run(f"apt install -y {pkg}", shell=True)
+            table.add_row(pkg, "Installed")
+        else:
+            table.add_row(pkg, "Present")
+
+    console.print(table)
 
 def get_rootfs(image_name, url):
     if os.path.exists(image_name):
         if ask("Existing image file found. Delete and download a new one?", "N"):
             os.remove(image_name)
         else:
-            console.print("[yellow][!] Using existing rootfs archive[/yellow]")
             return
-    console.print("[blue][*] Downloading rootfs...[/blue]")
-    subprocess.run(f"wget --continue {url}", shell=True)
+
+    table = Table(title="Progress", show_lines=True)
+    table.add_column("Task", style="cyan")
+    table.add_column("Status", style="yellow")
+    table.add_row("Downloading Rootfs", "Starting...")
+
+    console.print(table)
+
+    with Progress(
+        "[progress.description]{task.description}",
+        BarColumn(),
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        TimeRemainingColumn(),
+        transient=True,
+    ) as progress:
+        task = progress.add_task("Downloading", filename=image_name, total=0)
+
+        with requests.get(url, stream=True) as r:
+            total = int(r.headers.get("Content-Length", 0))
+            progress.update(task, total=total)
+
+            with open(image_name, "wb") as f:
+                for chunk in r.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        f.write(chunk)
+                        progress.update(task, advance=len(chunk))
 
 def extract_rootfs(image_name, keep_chroot):
+    table = Table(title="Progress", show_lines=True)
+    table.add_column("Task", style="cyan")
+    table.add_column("Status", style="yellow")
+
     if not keep_chroot:
-        console.print("\n[blue][*] Extracting rootfs...[/blue]")
+        table.add_row("Extracting Rootfs", "In Progress...")
+        console.print(table)
         subprocess.run(f"proot --link2symlink tar -xf {image_name}", shell=True)
     else:
-        console.print("[yellow][!] Using existing rootfs directory[/yellow]")
+        table.add_row("Extracting Rootfs", "Skipped (Already Exists)")
+        console.print(table)
 
 def create_launcher(chroot, username="kali"):
     launcher_path = f"{os.environ['PREFIX']}/bin/nethunter"
@@ -168,20 +210,25 @@ def fix_uid():
     subprocess.run(f"nh -r usermod -u {uid} kali", shell=True)
     subprocess.run(f"nh -r groupmod -g {gid} kali", shell=True)
 
+def cleanup(image_name):
+    if os.path.exists(image_name):
+        if ask("Delete downloaded rootfs file?", "N"):
+            os.remove(image_name)
+
 def final_instructions():
     show_banner("NetHunter", "blue")
-    console.print(Panel.fit(
-        "[green][=] Kali NetHunter for Termux installed successfully[/green]\n\n"
-        "[cyan][+] To start Kali NetHunter, type:[/cyan]\n"
-        "[bold green]nethunter             # Start CLI[/bold green]\n"
-        "[bold green]nethunter kex passwd  # Set KeX password[/bold green]\n"
-        "[bold green]nethunter kex &       # Start GUI[/bold green]\n"
-        "[bold green]nethunter kex stop    # Stop GUI[/bold green]\n"
-        "[bold green]nethunter -r          # Run as root[/bold green]\n"
-        "[bold green]nh                    # Shortcut[/bold green]",
-        title="[bold yellow]Installation Complete[/bold yellow]",
-        border_style="green"
-    ))
+    table = Table(title="How to Use", show_lines=True)
+    table.add_column("Command", style="green", no_wrap=True)
+    table.add_column("Description", style="cyan")
+
+    table.add_row("nethunter", "Start Kali NetHunter CLI")
+    table.add_row("nethunter kex passwd", "Set KeX password")
+    table.add_row("nethunter kex &", "Start GUI session")
+    table.add_row("nethunter kex stop", "Stop GUI session")
+    table.add_row("nethunter -r", "Run as root")
+    table.add_row("nh", "Shortcut")
+
+    console.print(table)
 
 # === Main ===
 
@@ -204,3 +251,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
