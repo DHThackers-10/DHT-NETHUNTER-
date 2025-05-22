@@ -1,5 +1,7 @@
 # DHT-NETHUNTER
 
+![DHT-TRACKER](https://img.shields.io/badge/DHT-HACKERS-red?style=for-the-badge)
+
 **The most powerful Kali NetHunter installer for Termux. Built with a stunning Rich UI by [TEAM HCO].**
 
 ---
@@ -38,7 +40,7 @@ python3 DHT-NETHUNTER.py
 
 ---
 
-✅ Usage Instructions
+# ✅ Usage Instructions
 
 After installation, use the following commands inside Termux:
 
@@ -66,7 +68,7 @@ nh                    # Shortcut alias
 
 Android with Termux
 
-5GB+ free space
+12GB+ free space
 
 Internet connection
 
