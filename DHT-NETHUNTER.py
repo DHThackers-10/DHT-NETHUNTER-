@@ -206,8 +206,8 @@ def final_instructions():
     table.add_row("nethunter kex &", "Start GUI")
     table.add_row("nethunter kex stop", "Stop GUI")
     console.print(table)
-    console.print(Panel.fit"[green]This tool is for ethical hacking education only.\n"
-        
+    console.print(Panel.fit"[green]This tool is for ethical hacking education only.\n"     
+    )
 def move_chroot_to_home(chroot):
     home = os.environ["HOME"]
     target = os.path.join(home, chroot)
