@@ -206,8 +206,7 @@ def final_instructions():
     table.add_row("nethunter kex &", "Start GUI")
     table.add_row("nethunter kex stop", "Stop GUI")
     console.print(table)
-    console.print("[green]echo "nameserver 8.8.8.8" > /etc/resolv.conf[/green]")
-    
+    console.print('[green]echo "nameserver 8.8.8.8" > /etc/resolv.conf[/green]')
 def move_chroot_to_home(chroot):
     home = os.environ["HOME"]
     target = os.path.join(home, chroot)
