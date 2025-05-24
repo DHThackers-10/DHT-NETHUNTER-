@@ -167,12 +167,23 @@ def configure(chroot):
 
 def fix_uid_gid():
     table = task_table("Fix UID/GID")
-    table.add_row("UID/GID Sync", "In Progress...")
+    table.add_row("Injecting UID/GID", "In Progress...")
     with Live(table, refresh_per_second=5):
         uid, gid = os.getuid(), os.getgid()
-        subprocess.run(f"nh -r usermod -u {uid} kali", shell=True)
-        subprocess.run(f"nh -r groupmod -g {gid} kali", shell=True)
-        table.columns[1]._cells[0] = Text("Done", style="bold green")
+        launcher_path = "/data/data/com.termux/files/usr/etc/proot-distro/nethunter.sh"
+        if os.path.exists(launcher_path):
+            with open(launcher_path, "r") as f:
+                script = f.read()
+
+            if "export UID=" not in script:
+                script = script.replace(
+                    "exec proot",
+                    f"export UID={uid}\nexport GID={gid}\nexec proot"
+                )
+                with open(launcher_path, "w") as f:
+                    f.write(script)
+
+        table.columns[1]._cells[0] = Text("Injected", style="bold green")
 
 def create_launcher(chroot):
     launcher_path = f"{os.environ['PREFIX']}/bin/nethunter"
@@ -237,7 +248,7 @@ def main():
     configure(chroot)
     fix_uid_gid()
     cleanup(image_name)
-    os.system(clear)
+    clear()
     final_instructions()
 
 if __name__ == "__main__":
