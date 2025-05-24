@@ -237,6 +237,7 @@ def main():
     configure(chroot)
     fix_uid_gid()
     cleanup(image_name)
+    os.system(clear)
     final_instructions()
 
 if __name__ == "__main__":
