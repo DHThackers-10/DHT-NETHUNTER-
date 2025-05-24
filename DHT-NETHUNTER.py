@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import os, time, subprocess, requests
+import os, time, subprocess, requests, glob
 from rich import print
 from rich.console import Console
 from rich.panel import Panel
@@ -56,7 +56,7 @@ def get_arch():
     table.add_row("CPU ABI", result); table.add_row("Architecture", arch)
     console.print(table)
     return arch
-    
+
 def check_existing_rootfs(arch):
     folder = f"kali-{arch}"
     if os.path.exists(folder):
@@ -89,12 +89,22 @@ def task_table(title):
     table.add_column("Status", style="yellow")
     return table
 
-def download_rootfs(image_name, url, max_retries=3):
-    if os.path.exists(image_name):
-        if Confirm.ask("[red]Existing Rootfs file found. Delete and redownload?[/red]"):
-            os.remove(image_name)
+def find_existing_tarxz(arch):
+    for file in glob.glob("*.tar.xz"):
+        if arch in file:
+            return file
+    return None
+
+def download_rootfs(arch, url, max_retries=3):
+    existing_file = find_existing_tarxz(arch)
+    image_name = f"kali-nethunter-2025.1-rootfs-full-{arch}.tar.xz"
+    
+    if existing_file:
+        console.print(f"[yellow][!] Found existing file: {existing_file}[/yellow]")
+        if Confirm.ask("[red]Use this file instead of downloading again?[/red]"):
+            return existing_file
         else:
-            return
+            os.remove(existing_file)
 
     progress = Progress(
         "[progress.description]{task.description}",
@@ -102,41 +112,32 @@ def download_rootfs(image_name, url, max_retries=3):
         transient=True,
     )
 
-    task_table = Table(title="Downloading Rootfs", show_lines=True)
-    task_table.add_column("Task", style="cyan", width=30)
-    task_table.add_column("Status", style="yellow")
-    task_table.add_row("Download Rootfs", "In Progress...")
+    task_table_ui = Table(title="Downloading Rootfs", show_lines=True)
+    task_table_ui.add_column("Task", style="cyan", width=30)
+    task_table_ui.add_column("Status", style="yellow")
+    task_table_ui.add_row("Download Rootfs", "In Progress...")
 
     layout = Table.grid()
     layout.add_row(progress)
-    layout.add_row(task_table)
+    layout.add_row(task_table_ui)
 
     for attempt in range(max_retries):
         try:
             with Live(layout, refresh_per_second=10):
-                headers = {}
-                downloaded = 0
-                if os.path.exists(image_name):
-                    downloaded = os.path.getsize(image_name)
-                    headers["Range"] = f"bytes={downloaded}-"
-
                 task = progress.add_task("Downloading", filename=image_name, total=0)
-                with requests.get(url, stream=True, headers=headers) as r:
+                with requests.get(url, stream=True) as r:
                     r.raise_for_status()
                     total = int(r.headers.get("Content-Length", 0))
-                    if "Content-Range" in r.headers:
-                        total += downloaded
-                    progress.update(task, total=total, completed=downloaded)
+                    progress.update(task, total=total)
 
-                    mode = "ab" if downloaded else "wb"
-                    with open(image_name, mode) as f:
+                    with open(image_name, "wb") as f:
                         for chunk in r.iter_content(1024 * 1024):
                             if chunk:
                                 f.write(chunk)
                                 progress.update(task, advance=len(chunk))
 
-                task_table.columns[1]._cells[0] = Text("Completed", style="bold green")
-                return
+                task_table_ui.columns[1]._cells[0] = Text("Completed", style="bold green")
+                return image_name
 
         except Exception as e:
             console.print(f"[red]Download failed (Attempt {attempt + 1}/{max_retries}): {e}[/red]")
@@ -218,6 +219,7 @@ def final_instructions():
     table.add_row("nethunter kex stop", "Stop GUI")
     console.print(table)
     console.print('[green]echo "nameserver 8.8.8.8" > /etc/resolv.conf[/green]')
+
 def move_chroot_to_home(chroot):
     home = os.environ["HOME"]
     target = os.path.join(home, chroot)
@@ -231,26 +233,24 @@ def move_chroot_to_home(chroot):
             exit(1)
     os.chdir(home)
     console.print(f"[green][+] Changed directory to {home}[/green]")
-    
+
 def main():
     banner()
     Kali_tool_banner()
     arch = get_arch()
     check_existing_rootfs(arch)
     chroot = f"kali-{arch}"
-    image_name = f"kali-nethunter-rootfs-full-{arch}.tar.xz"
-    url = f"https://kali.download/nethunter-images/current/rootfs/{image_name}"
+    url = f"https://image-nethunter.kali.org/nethunter-fs/kali-2025.1/kali-nethunter-2025.1-rootfs-full-{arch}.tar.xz"
     check_dependencies()
-    download_rootfs(image_name, url)
-    extract_rootfs(image_name, chroot)
+    image_file = download_rootfs(arch, url)
+    extract_rootfs(image_file, chroot)
     move_chroot_to_home(chroot)
     create_launcher(chroot)
     configure(chroot)
     fix_uid_gid()
-    cleanup(image_name)
+    cleanup(image_file)
     clear()
     final_instructions()
 
 if __name__ == "__main__":
     main()
-    
