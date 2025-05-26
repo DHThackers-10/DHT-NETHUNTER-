@@ -240,7 +240,7 @@ def main():
     arch = get_arch()
     check_existing_rootfs(arch)
     chroot = f"kali-{arch}"
-    url = f"https://image-nethunter.kali.org/nethunter-fs/kali-2025.1/kali-nethunter-2025.1-rootfs-full-{arch}.tar.xz"
+    url = f"https://image-nethunter.kali.org/nethunter-fs/kali-weekly/kali-nethunter-2025.W20-rolling-rootfs-full-{arch}.tar.xz"
     check_dependencies()
     image_file = download_rootfs(arch, url)
     extract_rootfs(image_file, chroot)
