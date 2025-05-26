@@ -97,7 +97,7 @@ def find_existing_tarxz(arch):
 
 def download_rootfs(arch, url, max_retries=3):
     existing_file = find_existing_tarxz(arch)
-    image_name = f"kali-nethunter-2025.1-rootfs-full-{arch}.tar.xz"
+    image_name = f"kali-nethunter-2025.W20-rolling-rootfs-full-{arch}.tar.xz"
     
     if existing_file:
         console.print(f"[yellow][!] Found existing file: {existing_file}[/yellow]")
