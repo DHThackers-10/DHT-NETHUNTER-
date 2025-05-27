@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import os, time, subprocess, requests, glob
+import os, time, subprocess, requests, glob, re
 from rich import print
 from rich.console import Console
 from rich.panel import Panel
@@ -57,6 +57,25 @@ def get_arch():
     console.print(table)
     return arch
 
+def get_latest_rootfs_url(arch):
+    base_url = "https://image-nethunter.kali.org/nethunter-fs/kali-weekly/"
+    res = requests.get(base_url)
+    if res.status_code != 200:
+        console.print(f"[red]Could not access: {base_url}[/red]")
+        exit(1)
+    matches = re.findall(rf'href="(kali-nethunter-.*?-rootfs-full-{arch}\.tar\.xz)"', res.text)
+    if not matches:
+        console.print(f"[red]No matching rootfs for architecture: {arch}[/red]")
+        exit(1)
+    latest_file = sorted(matches)[-1]
+    return base_url + latest_file
+
+def find_existing_tarxz(arch):
+    for file in glob.glob("*.tar.xz"):
+        if arch in file:
+            return file
+    return None
+
 def check_existing_rootfs(arch):
     folder = f"kali-{arch}"
     if os.path.exists(folder):
@@ -89,16 +108,10 @@ def task_table(title):
     table.add_column("Status", style="yellow")
     return table
 
-def find_existing_tarxz(arch):
-    for file in glob.glob("*.tar.xz"):
-        if arch in file:
-            return file
-    return None
-
 def download_rootfs(arch, url, max_retries=3):
     existing_file = find_existing_tarxz(arch)
-    image_name = f"kali-nethunter-2025.W20-rolling-rootfs-full-{arch}.tar.xz"
-    
+    filename = url.split("/")[-1]
+
     if existing_file:
         console.print(f"[yellow][!] Found existing file: {existing_file}[/yellow]")
         if Confirm.ask("[red]Use this file instead of downloading again?[/red]"):
@@ -124,20 +137,20 @@ def download_rootfs(arch, url, max_retries=3):
     for attempt in range(max_retries):
         try:
             with Live(layout, refresh_per_second=10):
-                task = progress.add_task("Downloading", filename=image_name, total=0)
+                task = progress.add_task("Downloading", filename=filename, total=0)
                 with requests.get(url, stream=True) as r:
                     r.raise_for_status()
                     total = int(r.headers.get("Content-Length", 0))
                     progress.update(task, total=total)
 
-                    with open(image_name, "wb") as f:
+                    with open(filename, "wb") as f:
                         for chunk in r.iter_content(1024 * 1024):
                             if chunk:
                                 f.write(chunk)
                                 progress.update(task, advance=len(chunk))
 
                 task_table_ui.columns[1]._cells[0] = Text("Completed", style="bold green")
-                return image_name
+                return filename
 
         except Exception as e:
             console.print(f"[red]Download failed (Attempt {attempt + 1}/{max_retries}): {e}[/red]")
@@ -175,7 +188,6 @@ def fix_uid_gid():
         if os.path.exists(launcher_path):
             with open(launcher_path, "r") as f:
                 script = f.read()
-
             if "export UID=" not in script:
                 script = script.replace(
                     "exec proot",
@@ -183,7 +195,6 @@ def fix_uid_gid():
                 )
                 with open(launcher_path, "w") as f:
                     f.write(script)
-
         table.columns[1]._cells[0] = Text("Injected", style="bold green")
 
 def create_launcher(chroot):
@@ -240,8 +251,8 @@ def main():
     arch = get_arch()
     check_existing_rootfs(arch)
     chroot = f"kali-{arch}"
-    url = f"https://image-nethunter.kali.org/nethunter-fs/kali-weekly/kali-nethunter-2025.W20-rolling-rootfs-full-{arch}.tar.xz"
     check_dependencies()
+    url = get_latest_rootfs_url(arch)
     image_file = download_rootfs(arch, url)
     extract_rootfs(image_file, chroot)
     move_chroot_to_home(chroot)
