@@ -10,6 +10,7 @@ import shutil
 from pathlib import Path
 
 from rich import print
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
@@ -190,52 +191,31 @@ def download_rootfs(arch, url, max_retries=3):
                 console.print("[yellow]Retrying in 5 seconds...[/yellow]")
                 time.sleep(5)
 
-def extract_rootfs(image_name):
-    # Keep tasks and their statuses here
-    tasks = [
-        ("Extract rootfs archive", "In Progress...")
-    ]
+def extract_rootfs(image_name, keep_chroot):
+    table = Table(title="Rootfs Extraction", box=box.SIMPLE_HEAVY, expand=True)
+    table.add_column("Step", style="bold green")
+    table.add_column("Status", style="bold cyan")
 
-    # Create and show initial table
-    table = Table(title="Extracting rootfs")
-    table.add_column("Task")
-    table.add_column("Status")
+    if not keep_chroot:
+        table.add_row("Extracting", f"Starting extraction of [bold]{image_name}[/bold] using proot...")
+        with Live(table, refresh_per_second=4, console=console):
+            try:
+                subprocess.run(
+                    ["proot", "--link2symlink", "tar", "-xf", image_name],
+                    stderr=subprocess.DEVNULL,
+                    check=True,
+                )
+                table.add_row("Completed", f"[green]Extraction successful[/green]")
+            except subprocess.CalledProcessError:
+                table.add_row("Failed", "[red]Extraction failed (but continuing)...[/red]")
+    else:
+        table.add_row("Notice", "[yellow]Using existing rootfs directory[/yellow]")
 
-    for task, status in tasks:
-        table.add_row(task, status)
-
-    console.clear()
-    console.print(table)
-
-    try:
-        # Run the extraction command
-        subprocess.run(
-            ["proot", "--link2symlink", "tar", "-xf", image_name],
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-        # If successful, update status
-        tasks[0] = ("Extract rootfs archive", "[green]Done[/green]")
-
-    except subprocess.CalledProcessError:
-        # On failure, update status
-        tasks[0] = ("Extract rootfs archive", "[red]Failed but continuing[/red]")
-
-    # Rebuild and print updated table
-    table = Table(title="Extracting rootfs")
-    table.add_column("Task")
-    table.add_column("Status")
-    for task, status in tasks:
-        table.add_row(task, status)
-
-    console.clear()
     console.print(table)
 
 def create_launcher(prefix, chroot, username):
-    console.print(Panel("[bold cyan]Creating nethunter launcher[/bold cyan]", title="Step"))
     nh_launcher = Path(prefix) / "bin" / "nethunter"
     nh_shortcut = Path(prefix) / "bin" / "nh"
-
     script = f"""#!/data/data/com.termux/files/usr/bin/bash -e
 cd ${{HOME}}
 unset LD_PRELOAD
@@ -284,54 +264,21 @@ else
     $cmdline -c "$cmd"
 fi
 """
-
-    table = Table(show_header=True, header_style="bold green")
-    table.add_column("File")
-    table.add_column("Action")
-
-    table.add_row(str(nh_launcher), "Writing launcher script")
     nh_launcher.write_text(script)
     nh_launcher.chmod(0o700)
 
     if nh_shortcut.is_symlink():
         nh_shortcut.unlink()
-        table.add_row(str(nh_shortcut), "Removed old shortcut symlink")
-
     if not nh_shortcut.exists():
         nh_shortcut.symlink_to(nh_launcher)
-        table.add_row(str(nh_shortcut), "Created shortcut symlink")
-
-    console.print(table)
 
 def check_kex(wimg):
-    console.print(Panel("[bold cyan]Checking KeX dependencies[/bold cyan]", title="Step"))
-    table = Table(show_header=True)
-    table.add_column("Action")
-    table.add_column("Status")
-
     if wimg in ("nano", "minimal"):
-        table.add_row("Running apt update", "In Progress...")
-        console.print(table)
-        with Progress(SpinnerColumn(), TextColumn("{task.description}")) as progress:
-            task1 = progress.add_task("Updating apt repositories...", start=False)
-            progress.start_task(task1)
-            subprocess.run(["nh", "sudo", "apt", "update"])
-            table.rows[-1].cells[1].text = "[green]Done[/green]"
-            console.print(table)
-
-            task2 = progress.add_task("Installing tightvncserver and kali-desktop-xfce...", start=False)
-            progress.start_task(task2)
-            subprocess.run(["nh", "sudo", "apt", "install", "-y", "tightvncserver", "kali-desktop-xfce"])
-            table.add_row("Install packages", "[green]Done[/green]")
-            console.print(table)
-    else:
-        table.add_row("KeX dependencies", "[yellow]Not required for this image[/yellow]")
-        console.print(table)
+        console.print("[blue][*] Installing KeX dependencies...[/blue]")
+        subprocess.run("nh sudo apt update && nh sudo apt install -y tightvncserver kali-desktop-xfce", shell=True)
 
 def create_kex_launcher(chroot):
-    console.print(Panel("[bold cyan]Creating KeX launcher script[/bold cyan]", title="Step"))
     kex_launcher = Path(chroot) / "usr" / "bin" / "kex"
-
     script = """#!/bin/bash
 
 function start-kex() {
@@ -401,83 +348,42 @@ case $1 in
         ;;
 esac
 """
-    table = Table(show_header=True)
-    table.add_column("File")
-    table.add_column("Action")
-
-    table.add_row(str(kex_launcher), "Writing KeX launcher script")
     kex_launcher.write_text(script)
     kex_launcher.chmod(0o700)
-    console.print(table)
 
 def fix_profile_bash(chroot):
-    console.print(Panel("[bold cyan]Fixing .bash_profile[/bold cyan]", title="Step"))
     bash_profile = Path(chroot) / "root" / ".bash_profile"
     if bash_profile.exists():
-        lines = bash_profile.read_text().splitlines()
+        text = bash_profile.read_text()
         new_lines = []
         skip = False
-        for line in lines:
-            if line.strip().startswith("if") and not skip:
+        for line in text.splitlines():
+            if line.strip().startswith("if"):
                 skip = True
-                continue
-            if line.strip().startswith("fi") and skip:
-                skip = False
-                continue
             if not skip:
                 new_lines.append(line)
-        bash_profile.write_text("\n".join(new_lines))
-        console.print("[green]Removed conditional blocks from .bash_profile[/green]")
-    else:
-        console.print("[yellow].bash_profile not found, skipping[/yellow]")
+            if skip and line.strip().endswith("fi"):
+                skip = False
+        bash_profile.write_text("\n".join(new_lines) + "\n")
 
 def fix_resolv_conf(chroot):
-    console.print(Panel("[bold cyan]Fixing resolv.conf[/bold cyan]", title="Step"))
-    resolv_conf = Path(chroot) / "etc" / "resolv.conf"
-    try:
-        resolv_conf.write_text("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
-        console.print("[green]DNS configured successfully[/green]")
-    except Exception as e:
-        console.print(f"[red]Failed to write resolv.conf: {e}[/red]")
-        
+    resolv_path = Path(chroot) / "etc" / "resolv.conf"
+    resolv_path.write_text("nameserver 9.9.9.9\nnameserver 149.112.112.112\n")
+
 def fix_sudo(chroot):
-    console.print(Panel("[bold cyan]Fixing sudo and su permissions[/bold cyan]", title="Step"))
-    sudo = Path(chroot) / "usr" / "bin" / "sudo"
-    su = Path(chroot) / "usr" / "bin" / "su"
-    sudo.chmod(sudo.stat().st_mode | 0o4000)
-    su.chmod(su.stat().st_mode | 0o4000)
-
-    sudoers_d = Path(chroot) / "etc" / "sudoers.d" / "kali"
-    sudoers_d.write_text("kali    ALL=(ALL:ALL) ALL\n")
-
+    sudo_path = Path(chroot) / "usr" / "bin"
+    sudo_path.joinpath("sudo").chmod(0o4755)
+    sudo_path.joinpath("su").chmod(0o4755)
+    kali_sudoers = Path(chroot) / "etc" / "sudoers.d" / "kali"
+    kali_sudoers.write_text("kali    ALL=(ALL:ALL) ALL\n")
     sudo_conf = Path(chroot) / "etc" / "sudo.conf"
     sudo_conf.write_text("Set disable_coredump false\n")
 
-    table = Table(show_header=True, header_style="bold magenta")
-    table.add_column("File")
-    table.add_column("Action")
-
-    table.add_row(str(sudo), "Set SUID bit")
-    table.add_row(str(su), "Set SUID bit")
-    table.add_row(str(sudoers_d), "Configured sudoers for kali user")
-    table.add_row(str(sudo_conf), "Configured sudo.conf")
-
-    console.print(table)
-
 def fix_uid(chroot):
-    console.print(Panel("[bold cyan]Fixing UID and GID for kali user[/bold cyan]", title="Step"))
     uid = os.getuid()
     gid = os.getgid()
-    
-    console.print(f"Detected UID: [bold]{uid}[/bold], GID: [bold]{gid}[/bold]")
-    
-    try:
-        subprocess.run(["nh", "-r", "usermod", "-u", str(uid), "kali"], check=True, stderr=subprocess.DEVNULL)
-        subprocess.run(["nh", "-r", "groupmod", "-g", str(gid), "kali"], check=True, stderr=subprocess.DEVNULL)
-        subprocess.run(["nh", "-r", "chown", "-R", "kali:kali", "/home/kali"], check=True, stderr=subprocess.DEVNULL)
-        console.print("[green]UID and GID fix applied successfully.[/green]")
-    except subprocess.CalledProcessError:
-        console.print("[bold red]Failed to fix UID and GID. You may need to check permissions.[/bold red]")
+    subprocess.run(f"nh -r usermod -u {uid} kali", shell=True, stderr=subprocess.DEVNULL)
+    subprocess.run(f"nh -r groupmod -g {gid} kali", shell=True, stderr=subprocess.DEVNULL)
 
 def cleanup(image_name):
     if os.path.exists(image_name) and Confirm.ask("Delete downloaded rootfs file?"):
@@ -496,40 +402,42 @@ def final_instructions():
     table.add_row("nethunter kex &", "Start GUI")
     table.add_row("nethunter kex stop", "Stop GUI")
     console.print(table)
-    console.print('[green]mkdir -p /root/.config/tigervnc && mkdir -p /root/.vnc[/green]')
+    console.print('[green]If you get error check our GitHub repository or join our Whatsapp group[/green]')
 
 def move_chroot_to_home(chroot):
     home = os.environ["HOME"]
     target = os.path.join(home, chroot)
-    if os.path.abspath(os.getcwd()) != home:
-        source = os.path.join(os.getcwd(), chroot)
-        if os.path.exists(source):
-            console.print(f"[blue][*] Moving {chroot} to home directory...[/blue]")
-            subprocess.run(f"mv {source} {home}", shell=True)
-        else:
-            console.print(f"[red]Error: {source} does not exist[/red]")
-            exit(1)
-    os.chdir(home)
-    console.print(f"[green][+] Changed directory to {home}[/green]")
+    if os.path.exists(chroot):
+        if os.path.exists(target):
+            console.print(f"[yellow][!] Target folder {target} already exists. Removing...[/yellow]")
+            shutil.rmtree(target)
+        console.print(f"[blue][*] Moving {chroot} to {target}...[/blue]")
+        shutil.move(chroot, target)
+    else:
+        console.print(f"[red][!] Chroot folder {chroot} not found! Skipping move.[/red]")
 
 def main():
     banner()
     Kali_tool_banner()
     arch = get_arch()
-    check_existing_rootfs(arch)
     check_dependencies()
-    rootfs_url = get_latest_rootfs_url(arch)
-    image_name = download_rootfs(arch, rootfs_url)
-    extract_rootfs(image_name)
-    chroot = f"kali-{arch}"
-    create_launcher(os.environ["PREFIX"], chroot, "kali")
-    check_kex("full")  # or pass based on image name detection
-    create_kex_launcher(chroot)
-    fix_profile_bash(chroot)
-    fix_resolv_conf(chroot)
-    shutil.move("kali-arm64", os.path.expanduser("~"))
+    check_existing_rootfs(arch)
+    url = get_latest_rootfs_url(arch)
+    image_name = download_rootfs(arch, url)
+    extract_rootfs(image_name, keep_chroot=False)
+    move_chroot_to_home(f"kali-{arch}")
+    chroot_path = os.path.join(os.environ["HOME"], f"kali-{arch}")
+    create_launcher(os.environ["PREFIX"], chroot_path, "kali")
+    check_kex("full")  # You can modify this based on desired image type
+    create_kex_launcher(chroot_path)
+    fix_profile_bash(chroot_path)
+    fix_resolv_conf(chroot_path)
+    fix_sudo(chroot_path)
+    fix_uid(chroot_path)
+    cleanup(image_name)
     clear()
     final_instructions()
+
 if __name__ == "__main__":
     main()
-    
+
