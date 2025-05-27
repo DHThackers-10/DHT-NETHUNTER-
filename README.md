@@ -37,7 +37,14 @@ git clone https://github.com/DHThackers-10/DHT-NETHUNTER-.git
 cd DHT-NETHUNTER- 
 python3 DHT-NETHUNTER.py
 ```
+# Kali-menu error solution 
+```
+mkdir -p /usr/share/kali-menu
 
+echo -e '#!/bin/sh\nexit 0' > /usr/share/kali-menu/update-kali-menu
+
+chmod +x /usr/share/kali-menu/update-kali-menu
+```
 ---
 
 # ✅ Usage Instructions
