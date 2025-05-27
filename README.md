@@ -45,6 +45,19 @@ echo -e '#!/bin/sh\nexit 0' > /usr/share/kali-menu/update-kali-menu
 
 chmod +x /usr/share/kali-menu/update-kali-menu
 ```
+
+#Kex error solution 
+
+```
+rm -f /usr/bin/perl
+find /usr/bin -type f -executable -name 'perl*'
+ln -s /usr/bin/perl5.40-aarch64-linux-gnu /usr/bin/perl
+perl -v
+```
+now run 
+```
+kex
+```
 ---
 
 # ✅ Usage Instructions
