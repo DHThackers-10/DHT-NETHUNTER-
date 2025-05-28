@@ -32,7 +32,7 @@ Open **Termux** and run the following:
 ```python
 apt update && apt upgrade -y
 pkg install git python proot-distro wget tar -y
-pip install pyfiglet rich
+pip install pyfiglet rich requests 
 git clone https://github.com/DHThackers-10/DHT-NETHUNTER-.git
 cd DHT-NETHUNTER- 
 python3 DHT-NETHUNTER.py
