@@ -54,6 +54,11 @@ find /usr/bin -type f -executable -name 'perl*'
 ln -s /usr/bin/perl5.40-aarch64-linux-gnu /usr/bin/perl
 perl -v
 ```
+
+```
+mkdir -p /root/.config/tigervnc
+mkdir -p /root/.vnc
+```
 **now run**
 ```
 kex
