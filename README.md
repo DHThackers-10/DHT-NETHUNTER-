@@ -2,7 +2,7 @@
 
 ![DHT-TRACKER](https://img.shields.io/badge/DHT-HACKERS-red?style=for-the-badge)
 
-**The most powerful Kali NetHunter installer for Termux. Built with a stunning Rich UI by [TEAM HCO].**
+**The most powerful Kali NetHunter installer for Termux. Built with a stunning Rich UI by [TEAM DHT].**
 
 ---
 
@@ -105,7 +105,7 @@ Python 3.x
 
 # 👨‍💻 Author & Credits
 
-Tool by: [TEAM HCO]
+Tool by: [TEAM DHT]
 
 Channel: [YouTube – DHT Hackers](https://youtube.com/@dht-hackers_10?feature=shared)
 
